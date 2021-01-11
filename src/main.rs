@@ -33,13 +33,15 @@ fn main() {
     // let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0xff, 0x00, 0x00, 0x08, 0x0f, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x91, 0xc0, 0xd1, 0x3b, 0xee, 0xa3, 0xef, 0x56, 0x60, 0x17, 0x88, 0x87, 0x50 ];
 
 
-    let path = "5545.pcap";
+    // let path = "5545.pcap";
 
-    let prepend: [u8;1] = [ 0x45 ];
+    let prepend: [u8;0] = [ ];
 
-    let mut file = File::open(path).unwrap();
+    let stdin = std::io::stdin();
+
+//     let mut file = File::open(path).unwrap();
     let mut num_blocks = 0;
-    let mut reader = LegacyPcapReader::new(65536, file).expect("PcapNGReader");
+    let mut reader = LegacyPcapReader::new(65536, stdin).expect("PcapNGReader");
     
     let mut hdrcnt: [usize; 0x10000] = [0; 65536];
 

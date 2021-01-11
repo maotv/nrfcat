@@ -45,6 +45,8 @@ fn main() {
     
     let mut hdrcnt: [usize; 0x10000] = [0; 65536];
 
+    let mut cnt = 1000;
+
     loop {
         match reader.next() {
             Ok((offset, block)) => {
@@ -68,13 +70,23 @@ fn main() {
                             pack[i] = b.data[i-pl];
                         }
 
+                        let addr: usize = (pack[0] as usize) << 8 | pack[1] as usize;
+                        hdrcnt[addr] += 1;
+
+                        cnt -= 1;
+                        if cnt < 1 {
+                            for i in 0..65536 {
+                                if hdrcnt[i] > 9 {
+                                    println!("{:04x}: {}", i, hdrcnt[i]);
+                                }
+                            }
+                            cnt = 1000;
+                        }
 
 
                         examine(&pack);
                         // parse_packet(b.data, 4);
                         // parse_packet(b.data, 5);
-                        // let addr: usize = (b.data[0] as usize) << 8 | b.data[1] as usize;
-                        // hdrcnt[addr] += 1;
 
                     },
                     PcapBlockOwned::NG(_) => unreachable!(),
@@ -90,12 +102,7 @@ fn main() {
     }
     println!("num_blocks: {}", num_blocks);
 
-    for i in 0..65536 {
-        if hdrcnt[i] > 9 {
-            println!("{:04x}: {}", i, hdrcnt[i]);
-        }
-
-    }
+    
 
 }
 

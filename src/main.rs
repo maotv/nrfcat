@@ -46,6 +46,7 @@ fn main() {
     let mut hdrcnt: [usize; 0x10000] = [0; 65536];
 
     let mut cnt = 1000;
+    let mut linecnt = 0;
 
     loop {
         match reader.next() {
@@ -60,6 +61,8 @@ fn main() {
                         // use linktype to parse b.data()
                         // println!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", b.data[0], b.data[1], b.data[2], b.data[3], b.data[4], b.data[5]);
                         // parse_packet(b.data, 3);
+
+                        linecnt += 1;
 
                         let mut pack: [u8;32] = [0;32];
                         let pl = prepend.len();
@@ -83,7 +86,7 @@ fn main() {
                             cnt = 1000;
                         }
 
-
+                        println!("{:05} | {:02x?}", linecnt, pack);
                         examine(&pack);
                         // parse_packet(b.data, 4);
                         // parse_packet(b.data, 5);

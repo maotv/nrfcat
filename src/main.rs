@@ -48,6 +48,8 @@ fn main() {
     let mut cnt = 1000;
     let mut linecnt = 0;
 
+    let mut max = 0;
+
     loop {
         match reader.next() {
             Ok((offset, block)) => {
@@ -75,6 +77,7 @@ fn main() {
 
                         let addr: usize = (pack[0] as usize) << 8 | pack[1] as usize;
                         hdrcnt[addr] += 1;
+                        if hdrcnt[addr] > max { max = hdrcnt[addr]; }
 
                         cnt -= 1;
                         if cnt < 1 {
@@ -86,7 +89,7 @@ fn main() {
                             cnt = 1000;
                         }
 
-                        println!("{:05} | {:02x?}", linecnt, pack);
+                        println!("{:05} | {:02x?} max: {}", linecnt, pack, max);
                         examine(&pack);
                         // parse_packet(b.data, 4);
                         // parse_packet(b.data, 5);

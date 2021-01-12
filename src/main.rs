@@ -64,6 +64,14 @@ fn main() {
                         // println!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", b.data[0], b.data[1], b.data[2], b.data[3], b.data[4], b.data[5]);
                         // parse_packet(b.data, 3);
 
+                        if b.data[0] == 0 && b.data[1] == 0 {
+                            max = 0;
+                            for i in 0..65536 {
+                                hdrcnt[i] = 0;
+                            }
+                        }
+
+
                         linecnt += 1;
 
                         let mut pack: [u8;32] = [0;32];
@@ -75,7 +83,7 @@ fn main() {
                             pack[i] = b.data[i-pl];
                         }
 
-                        let addr: usize = (pack[0] as usize) << 8 | pack[1] as usize;
+                        let addr: usize = (pack[1] as usize) << 8 | pack[2] as usize;
                         hdrcnt[addr] += 1;
                         if hdrcnt[addr] > max { max = hdrcnt[addr]; }
 

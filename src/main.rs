@@ -30,7 +30,8 @@ fn xmain() {
 
 
 struct PacketInfo {
-    lenth: u32
+    length: u32,
+    valid: bool
 }
 
 struct Statistics {
@@ -49,7 +50,7 @@ impl Statistics {
             ts_first: 0,
             ts_last: 0,
             count: 0,
-            maxh: 0,
+            maxh: 2, // init with 2, so we see only adresses with 3 or more packets
             maxa: 0,
             addrcnt: [0;0x10000]
         }
@@ -61,10 +62,10 @@ enum ANSI {
     Dark
 }
 
-fn style(c: ANSI, t: String) -> ANSIGenericString<str> {
+// fn style(c: ANSI, t: String) -> ANSIGenericString<str> {
 
-    
-}
+
+// }
 
 
 fn build_packet_string(data: &[u8], length: u32, hdr: bool) {
@@ -80,7 +81,7 @@ fn build_packet_string(data: &[u8], length: u32, hdr: bool) {
 
     for i in 3..32 {
         if i > length {
-            write!(out, "{} ", style(ANSI::Dark, &format!("{:02x}", data[i])) );
+            // write!(out, "{} ", style(ANSI::Dark, &format!("{:02x}", data[i])) );
         }
 
     }
@@ -115,6 +116,7 @@ fn process(pcnt: u32, data: &[u8], mut st: Statistics) -> Statistics
     }
 
     let info = examine(data);
+    if info.is_some() { must_show = true; }
 
 
     if must_show {
@@ -139,18 +141,21 @@ fn process(pcnt: u32, data: &[u8], mut st: Statistics) -> Statistics
 // Packets: 245 (pps: 12,5)
 // MaxSame:  33 (13,5%)
 
-fn report(st: &Statistics) {
+ fn report(st: &Statistics) {
 
     println!("");
-    println!("# Report");
-    println!("# Channel: {}, Address: {}", 0, 0);
+    // println!("# Report");
+    // println!("# Channel: {}, Address: {}", 0, 0);
+
+    println!("Valid/Multiple/Total");
 
     for i in 0..65536 {
         if st.addrcnt[i] > 9 {
             println!("[ ?? {:02x} {:02x} ] -> {}", i>>8, i&0xff, st.addrcnt[i]);
         }
     }
-
+    println!("--- end ----------------------------------------------------------------");
+    println!("");
 }
 
 fn main() {
@@ -229,18 +234,23 @@ fn main() {
 
 
 
-fn examine(p: &[u8]) -> PacketInfo {
+fn examine(p: &[u8]) -> Option<PacketInfo> {
+
+    let mut valid = false;
 
     for hdr in 3..6 {
         for dlen in 1..(30-hdr) {
-            examine_as_simple_shockburst(p, hdr, dlen);
-            examine_as_enhanced_shockburst(p, hdr, dlen);
+            let rv = match examine_as_simple_shockburst(p, hdr, dlen) {
+                Some(pi) => Some(pi),
+                None => examine_as_enhanced_shockburst(p, hdr, dlen)
+            };
+
+            if rv.is_some() { return rv; }
+
         }
     }
 
-    PacketInfo {
-        lenth: 9
-    }
+    None
 
 }
 
@@ -250,26 +260,29 @@ fn examine(p: &[u8]) -> PacketInfo {
 
 
 
-fn examine_as_simple_shockburst(p: &[u8], hdrlen: usize, datalen: usize) {
+fn examine_as_simple_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Option<PacketInfo> {
 
-    if p.len() < 32 { println!("small pack"); return; }
+    if p.len() < 32 { println!("small pack"); return None; }
     let head = header64(p,hdrlen);
     let calc_crc  = crc16(p, (hdrlen+datalen)*8);
     let pack_crc = (p[hdrlen+datalen] as u16) << 8 | p[hdrlen+datalen+1] as u16;
 
     if calc_crc == pack_crc {
         println!("s {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
+        Some(PacketInfo {
+            length: (hdrlen + datalen) as u32,
+            valid: true
+        })
     } else {
         // println!("{}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Red.paint(format!("{:04x}", pack_crc)));
+        None
     }
-
-
 
 }
 
-fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) {
+fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Option<PacketInfo> {
 
-    if p.len() < 32 { println!("small pack"); return; }
+    if p.len() < 32 { println!("small pack"); return None; }
     let head = header64(p,hdrlen);
     let calc_crc  = crc16(p, ((hdrlen+datalen)*8) + 9 );
 
@@ -278,11 +291,16 @@ fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) {
 
     if calc_crc == pack_crc {
         println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
+        Some(PacketInfo {
+            length: (hdrlen + datalen + 1) as u32,
+            valid: true
+        })
     } else {
+        None
         // println!("{}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Red.paint(format!("{:04x}", pack_crc)));
     }
 
-
+//    calc_crc == pack_crc
 
 }
 

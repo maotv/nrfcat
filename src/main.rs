@@ -3,11 +3,9 @@ use pcap_parser::traits::PcapReaderIterator;
 use std::fs::File;
 use std::io::Read;
 
-use ansi_term::Colour::Red;
-use ansi_term::Colour::Blue;
-use ansi_term::Colour::Green;
-use ansi_term::Colour::White;
-
+use ansi_term::{ANSIGenericString, Colour};
+use ansi_term::Style;
+use std::fmt::Write;
 
 fn xmain() {
 
@@ -28,6 +26,133 @@ fn xmain() {
 //     println!("lib: {:04x}", cs)
 
 }
+
+
+
+struct PacketInfo {
+    lenth: u32
+}
+
+struct Statistics {
+    ts_first: u32,
+    ts_last: u32,
+    count: u32,
+    maxh: u32, // higest number of headers with same addr
+    maxa: u32, // address with highest number of packets
+    addrcnt: [u32;0x10000]
+}
+
+impl Statistics {
+
+    fn new() -> Self {
+        Statistics {
+            ts_first: 0,
+            ts_last: 0,
+            count: 0,
+            maxh: 0,
+            maxa: 0,
+            addrcnt: [0;0x10000]
+        }
+    }
+}
+
+enum ANSI {
+    Normal,
+    Dark
+}
+
+fn style(c: ANSI, t: String) -> ANSIGenericString<str> {
+
+    
+}
+
+
+fn build_packet_string(data: &[u8], length: u32, hdr: bool) {
+
+    let mut out = String::with_capacity(256);
+
+    let base_hdr = match hdr {
+        true => Colour::Green.normal().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
+        false => Style::new().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2]))
+    };
+
+
+
+    for i in 3..32 {
+        if i > length {
+            write!(out, "{} ", style(ANSI::Dark, &format!("{:02x}", data[i])) );
+        }
+
+    }
+
+
+    // Colour::Green.paint(format!("{:04x}", pack_crc);
+
+
+}
+
+fn process(pcnt: u32, data: &[u8], mut st: Statistics) -> Statistics 
+{
+
+    let mut must_show = false;
+
+    // packet counter
+    st.count += 1;
+
+    // first three header bytes as u32
+    let h32: u32 = (data[0] as u32) << 16 | (data[1] as u32) << 8 | data[2] as u32;
+
+    // 2 header lsb for counting
+    let h16: usize = (h32&0xffff) as usize;
+
+    // count this header
+    st.addrcnt[h16] += 1;
+
+    if st.addrcnt[h16] > st.maxh {
+        st.maxh = st.addrcnt[h16];
+        st.maxa = h16 as u32;
+        must_show = true;
+    }
+
+    let info = examine(data);
+
+
+    if must_show {
+        println!("{:6} | {:02x} {:02x} {:02x} | {:02x} {:02x} | {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} | MAX [??{:04x}] {}", 
+            pcnt, data[0], data[1], data[2], data[3], data[4],
+            data[5], data[6], data[7], 
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+            st.maxa, st.maxh
+        );
+
+    }
+
+
+    st
+    
+}
+
+// Channel: 32
+// Header:  55 01 22 
+// Packets: 245 (pps: 12,5)
+// MaxSame:  33 (13,5%)
+
+fn report(st: &Statistics) {
+
+    println!("");
+    println!("# Report");
+    println!("# Channel: {}, Address: {}", 0, 0);
+
+    for i in 0..65536 {
+        if st.addrcnt[i] > 9 {
+            println!("[ ?? {:02x} {:02x} ] -> {}", i>>8, i&0xff, st.addrcnt[i]);
+        }
+    }
+
+}
+
 fn main() {
 
     // let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0xff, 0x00, 0x00, 0x08, 0x0f, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x91, 0xc0, 0xd1, 0x3b, 0xee, 0xa3, 0xef, 0x56, 0x60, 0x17, 0x88, 0x87, 0x50 ];
@@ -45,10 +170,16 @@ fn main() {
     
     let mut hdrcnt: [usize; 0x10000] = [0; 65536];
 
-    let mut cnt = 1000;
+    let mut cnt = 0;
+
+
     let mut linecnt = 0;
 
     let mut max = 0;
+
+
+    let mut stats = Statistics::new();
+    let mut allstats: Vec<Statistics> = Vec::new();
 
     loop {
         match reader.next() {
@@ -56,58 +187,34 @@ fn main() {
                 // println!("got new block");
                 num_blocks += 1;
                 match block {
+
                     PcapBlockOwned::LegacyHeader(_hdr) => {
                         // save hdr.network (linktype)
                     },
                     PcapBlockOwned::Legacy(b) => {
-                        // use linktype to parse b.data()
-                        // println!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", b.data[0], b.data[1], b.data[2], b.data[3], b.data[4], b.data[5]);
-                        // parse_packet(b.data, 3);
 
-                        if b.data[0] == 0 && b.data[1] == 0 {
-                            max = 0;
-                            for i in 0..65536 {
-                                hdrcnt[i] = 0;
-                            }
+                        if b.data[0] == 0 && b.data[1] == 0 && b.data[2] == 0 {
+                            report(&stats);
+                            allstats.push(stats);
+                            stats = Statistics::new();
+                        } else {
+
+                            if stats.ts_first == 0 { stats.ts_first = b.ts_sec; }
+                            stats.ts_last = b.ts_sec;
+
+                            stats = process(cnt, b.data, stats);
+                            cnt += 1;
+    
                         }
-
-
-                        linecnt += 1;
-
-                        let mut pack: [u8;32] = [0;32];
-                        let pl = prepend.len();
-                        for i in 0..pl {
-                            pack[i] = prepend[i];
-                        }
-                        for i in pl..32 {
-                            pack[i] = b.data[i-pl];
-                        }
-
-                        let addr: usize = (pack[1] as usize) << 8 | pack[2] as usize;
-                        hdrcnt[addr] += 1;
-                        if hdrcnt[addr] > max { max = hdrcnt[addr]; }
-
-                        cnt -= 1;
-                        if cnt < 1 {
-                            for i in 0..65536 {
-                                if hdrcnt[i] > 9 {
-                                    println!("{:04x}: {}", i, hdrcnt[i]);
-                                }
-                            }
-                            cnt = 1000;
-                        }
-
-                        println!("{:05} | {:02x?} max: {}", linecnt, pack, max);
-                        examine(&pack);
-                        // parse_packet(b.data, 4);
-                        // parse_packet(b.data, 5);
-
                     },
                     PcapBlockOwned::NG(_) => unreachable!(),
                 }
                 reader.consume(offset);
             },
-            Err(PcapError::Eof) => break,
+            Err(PcapError::Eof) => {
+                report(&stats);
+                break
+            },
             Err(PcapError::Incomplete) => {
                 reader.refill().unwrap();
             },
@@ -122,7 +229,7 @@ fn main() {
 
 
 
-fn examine(p: &[u8]) {
+fn examine(p: &[u8]) -> PacketInfo {
 
     for hdr in 3..6 {
         for dlen in 1..(30-hdr) {
@@ -130,6 +237,11 @@ fn examine(p: &[u8]) {
             examine_as_enhanced_shockburst(p, hdr, dlen);
         }
     }
+
+    PacketInfo {
+        lenth: 9
+    }
+
 }
 
 
@@ -146,7 +258,7 @@ fn examine_as_simple_shockburst(p: &[u8], hdrlen: usize, datalen: usize) {
     let pack_crc = (p[hdrlen+datalen] as u16) << 8 | p[hdrlen+datalen+1] as u16;
 
     if calc_crc == pack_crc {
-        println!("s {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Green.paint(format!("{:04x}", pack_crc)));
+        println!("s {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
     } else {
         // println!("{}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Red.paint(format!("{:04x}", pack_crc)));
     }
@@ -165,7 +277,7 @@ fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) {
     let pack_crc = (shifted[hdrlen+datalen+1] as u16) << 8 | shifted[hdrlen+datalen+2] as u16;
 
     if calc_crc == pack_crc {
-        println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Green.paint(format!("{:04x}", pack_crc)));
+        println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
     } else {
         // println!("{}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Red.paint(format!("{:04x}", pack_crc)));
     }

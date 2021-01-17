@@ -67,22 +67,56 @@ enum ANSI {
 
 // }
 
+fn write_packet_noinfo(hdr: &LegacyPcapBlock, data: &[u8], cnt: u32) {
 
-fn build_packet_string(data: &[u8], length: u32, hdr: bool) {
+    println!("{:05}.{:03} | - | {} | {} | {} | HCNT {}", hdr.ts_sec&0xffff, hdr.ts_usec/1000,
+        Colour::Blue.paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
+        Colour::Blue.paint(format!("{:02x} {:02x}", data[3], data[4])),
+        Colour::Blue.paint(format!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", 
+            data[5], data[6], data[7], 
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+            
+        )),
+        cnt
+        
+    );
+}
+fn write_packet_info(hdr: &LegacyPcapBlock, data: &[u8], info: &PacketInfo, cnt: u32) {
+
+//    let tx = match info.type
+
+    println!("{:05}.{:03} | - | {} | {} | {} | HCNT {}", hdr.ts_sec&0xffff, hdr.ts_usec/1000,
+        Colour::Green.paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
+        Colour::Blue.paint(format!("{:02x} {:02x}", data[3], data[4])),
+        Colour::Blue.paint(format!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", 
+            data[5], data[6], data[7], 
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+            
+        )),
+        cnt
+        
+    );
+}
+
+
+fn build_packet_string(data: &[u8], pi: Option<PacketInfo>) {
 
     let mut out = String::with_capacity(256);
 
-    let base_hdr = match hdr {
-        true => Colour::Green.normal().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
-        false => Style::new().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2]))
-    };
-
+    // let base_hdr = match hdr {
+    //     true => Colour::Green.normal().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
+    //     false => Style::new().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2]))
+    // };
 
 
     for i in 3..32 {
-        if i > length {
+//        if i > length {
             // write!(out, "{} ", style(ANSI::Dark, &format!("{:02x}", data[i])) );
-        }
+//        }
 
     }
 
@@ -92,9 +126,10 @@ fn build_packet_string(data: &[u8], length: u32, hdr: bool) {
 
 }
 
-fn process(pcnt: u32, data: &[u8], mut st: Statistics) -> Statistics 
+fn process(pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics 
 {
 
+    let data = pcap.data;
     let mut must_show = false;
 
     // packet counter
@@ -116,20 +151,28 @@ fn process(pcnt: u32, data: &[u8], mut st: Statistics) -> Statistics
     }
 
     let info = examine(data);
-    if info.is_some() { must_show = true; }
+    
 
-
-    if must_show {
-        println!("{:6} | {:02x} {:02x} {:02x} | {:02x} {:02x} | {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} | MAX [??{:04x}] {}", 
-            pcnt, data[0], data[1], data[2], data[3], data[4],
-            data[5], data[6], data[7], 
-            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
-            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
-            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
-            st.maxa, st.maxh
-        );
-
+    if info.is_some() {
+        write_packet_info(pcap, data, &info.expect("checked above"), st.addrcnt[h16]);
+    } else if  st.addrcnt[h16] > 2 {
+        write_packet_noinfo(pcap, data, st.addrcnt[h16]);
+    } else {
+        // ???
     }
+
+
+    // if must_show {
+    //     println!("{:6} | {:02x} {:02x} {:02x} | {:02x} {:02x} | {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} | MAX [??{:04x}] {}", 
+    //         pcnt, data[0], data[1], data[2], data[3], data[4],
+    //         data[5], data[6], data[7], 
+    //         data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+    //         data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+    //         data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+    //         st.maxa, st.maxh
+    //     );
+
+    // }
 
 
     st
@@ -207,7 +250,9 @@ fn main() {
                             if stats.ts_first == 0 { stats.ts_first = b.ts_sec; }
                             stats.ts_last = b.ts_sec;
 
-                            stats = process(cnt, b.data, stats);
+                            
+
+                            stats = process(cnt, &b, stats);
                             cnt += 1;
     
                         }

@@ -27,11 +27,25 @@ fn xmain() {
 
 }
 
+#[derive(Debug)]
+enum CRC {
+    None,
+    U8(u8),
+    U16(u16)
+}
 
+#[derive(Debug)]
+enum PacketKind {
+    Simple,
+    Enhanced
+}
 
+#[derive(Debug)]
 struct PacketInfo {
-    length: u32,
-    valid: bool
+    kind: PacketKind,
+    length: usize,
+    crc: CRC,
+    data: Vec<u8>
 }
 
 struct Statistics {
@@ -83,20 +97,72 @@ fn write_packet_noinfo(hdr: &LegacyPcapBlock, data: &[u8], cnt: u32) {
         
     );
 }
-fn write_packet_info(hdr: &LegacyPcapBlock, data: &[u8], info: &PacketInfo, cnt: u32) {
+fn write_packet_info(hdr: &LegacyPcapBlock, p: &[u8], info: &PacketInfo, cnt: u32) {
 
 //    let tx = match info.type
 
-    println!("{:05}.{:03} | - | {} | {} | {} | HCNT {}", hdr.ts_sec&0xffff, hdr.ts_usec/1000,
+
+    if info.length < 6 {
+        println!("{:05}.{:03} | {}", hdr.ts_sec&0xffff, hdr.ts_usec/1000, Colour::Red.paint("Invalid Packet") );
+        return;
+    }
+
+    // println!("{:?}", info);
+
+    let data = &info.data;
+    let se = match info.kind {
+        PacketKind::Simple => "s",
+        PacketKind::Enhanced => "e",
+        _ => "-"
+    };
+
+    let pckt = format!("XA XB XC XD XE {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} ", 
+        data[5], data[6], data[7], 
+        data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+        data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+        data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+    );
+
+    let crclength = match info.crc {
+        CRC::U8(c) => 1,
+        CRC::U16(c) => 2,
+        CRC::None => 0,
+    };
+
+    let realp = &pckt[5*3..info.length*3];
+    let crcs = match info.crc {
+        CRC::U8(c) => format!("{:02x}", data[info.length]),
+        CRC::U16(c) => format!("{:02x} {:02x}", data[info.length], data[info.length+1]),
+        CRC::None => format!(""),
+    };
+
+    let rest = &pckt[(info.length+crclength)*3..32*3];
+
+
+
+    let ascii: String = data.iter().map(|c| {
+        match c {
+            32..=126 => *c as char,
+            _=> '.'
+        }
+    }).collect();
+
+
+
+    println!("{:05}.{:03} | {} | {} | {} | {}{} {}| {} HC/{}", hdr.ts_sec&0xffff, hdr.ts_usec/1000, se, 
         Colour::Green.paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
         Colour::Blue.paint(format!("{:02x} {:02x}", data[3], data[4])),
-        Colour::Blue.paint(format!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", 
-            data[5], data[6], data[7], 
-            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
-            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
-            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+        Colour::Cyan.paint(realp),
+        Colour::Red.paint(crcs),
+        Colour::Blue.paint(rest),
+        // Colour::Blue.paint(format!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", 
+        //     data[5], data[6], data[7], 
+        //     data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+        //     data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+        //     data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
             
-        )),
+        //  )),
+        ascii,
         cnt
         
     );
@@ -303,21 +369,33 @@ fn examine(p: &[u8]) -> Option<PacketInfo> {
 
 
 
-
-
 fn examine_as_simple_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Option<PacketInfo> {
 
     if p.len() < 32 { println!("small pack"); return None; }
     let head = header64(p,hdrlen);
-    let calc_crc  = crc16(p, (hdrlen+datalen)*8);
-    let pack_crc = (p[hdrlen+datalen] as u16) << 8 | p[hdrlen+datalen+1] as u16;
+    let calc_crc_16  = crc16(p, (hdrlen+datalen)*8);
+    let calc_crc_8  = crc8(p, (hdrlen+datalen)*8);
 
-    if calc_crc == pack_crc {
-        println!("s {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
+    let pack_crc_16 = (p[hdrlen+datalen] as u16) << 8 | p[hdrlen+datalen+1] as u16;
+    let pack_crc_8 = p[hdrlen+datalen+1];
+
+    if calc_crc_16 == pack_crc_16 {
+        // println!("s {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
         Some(PacketInfo {
-            length: (hdrlen + datalen) as u32,
-            valid: true
+            kind: PacketKind::Simple,
+            length: (hdrlen + datalen),
+            crc: CRC::U16(calc_crc_16),
+            data: Vec::from(p)
         })
+
+    } else if calc_crc_8 == pack_crc_8 {
+            // println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc_8, Colour::Green.paint(format!("{:04x}", pack_crc_8)));
+            Some(PacketInfo {
+                kind: PacketKind::Enhanced,
+                length: hdrlen + datalen,
+                crc: CRC::U8(calc_crc_8),
+                data: Vec::from(p)
+            })
     } else {
         // println!("{}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Red.paint(format!("{:04x}", pack_crc)));
         None
@@ -329,18 +407,36 @@ fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Op
 
     if p.len() < 32 { println!("small pack"); return None; }
     let head = header64(p,hdrlen);
-    let calc_crc  = crc16(p, ((hdrlen+datalen)*8) + 9 );
+    let calc_crc_16  = crc16(p, ((hdrlen+datalen)*8) + 9 );
+    let calc_crc_8  = crc8(p, ((hdrlen+datalen)*8) + 9 );
 
     let shifted = shift_left(p);
-    let pack_crc = (shifted[hdrlen+datalen+1] as u16) << 8 | shifted[hdrlen+datalen+2] as u16;
+    let pack_crc_16 = (shifted[hdrlen+datalen+1] as u16) << 8 | shifted[hdrlen+datalen+2] as u16;
+    let pack_crc_8 = shifted[hdrlen+datalen+1];
 
-    if calc_crc == pack_crc {
-        println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Colour::Green.paint(format!("{:04x}", pack_crc)));
+    let mut datav = Vec::with_capacity(32);
+    datav.extend_from_slice(&p[0..5]);
+
+    if calc_crc_16 == pack_crc_16 {
+        
+        // println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc_16, Colour::Green.paint(format!("{:04x}", pack_crc_16)));
+        datav.extend_from_slice(&shifted[5..32]);
         Some(PacketInfo {
-            length: (hdrlen + datalen + 1) as u32,
-            valid: true
+            kind: PacketKind::Enhanced,
+            length: hdrlen + datalen + 1,
+            crc: CRC::U16(calc_crc_16),
+            data: datav
         })
-    } else {
+    } else if calc_crc_8 == pack_crc_8 {
+            // println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc_8, Colour::Green.paint(format!("{:04x}", pack_crc_8)));
+            datav.extend_from_slice(&shifted[5..32]);
+            Some(PacketInfo {
+                kind: PacketKind::Enhanced,
+                length: hdrlen + datalen + 1,
+                crc: CRC::U8(calc_crc_8),
+                data: datav
+            })
+        } else {
         None
         // println!("{}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc, Red.paint(format!("{:04x}", pack_crc)));
     }
@@ -403,6 +499,67 @@ fn parse_enhanced(p: &[u8], hdrlen: usize) {
 fn tvb_get_guint8(p: &[u8], offs: usize) -> u8 {
     // println!("tvb_get_guint8({}) -> {:02x}", offs, p[offs]);
     p[offs]
+}
+
+
+
+fn crc8(p: &[u8], len_bits: usize) -> u8
+{
+    let mut crc: u8 = 0xff; 
+
+    if (len_bits > 0) && (len_bits <= p.len() * 8) // bytes to bits
+    {
+        // The length of the data might not be a multiple of full bytes.
+        // Therefore we proceed over the data bit-by-bit (like the NRF24 does) to
+        // calculate the CRC.
+        // let mut data: u16 = 0;
+        // let mut byte: u8  = 0;
+        // let mut shift: u8 = 0;
+        let mut bitoffs: usize = 0;
+
+        // Get a new byte for the next 8 bits.
+        let mut byte: u8 = tvb_get_guint8(p, bitoffs>>3);
+
+        while bitoffs < len_bits
+        {
+
+            let shift = (bitoffs & 7) as u8;
+
+            // Shift the active bit to the position of bit 7 
+            // Assure all other bits are 0
+            let active_bit = (byte << shift) & 0x80;
+            // data &= 0x8000;
+            // println!("Data is {:04x}", data);
+
+            crc = crc ^ active_bit;
+            if (crc & 0x80) > 0 {
+                crc = (crc << 1) ^ 0x07;      // (1) 0000 0111 x^8 + x^2 + x + 1 // 0x1021 = (1) 0001 0000 0010 0001 = x^16+x^12+x^5+1
+            } else {
+                crc = crc << 1;
+            }
+
+            // println!("{:02} Data/CRC {:04x} {:04x}", bitoffs, active_bit, crc);
+
+
+            bitoffs += 1;
+            if 0 == (bitoffs & 7) {
+                // Get a new byte for the next 8 bits.
+                byte = tvb_get_guint8(p, bitoffs>>3);
+            }
+        }
+    }
+
+    return crc;
+
+
+
+    // crc = (crc << 1) ^ 0x1021;      // 0x1021 = (1) 0001 0000 0010 0001 = x^16+x^12+x^5+1
+    // crc = (crc << 1) ^ 0x1021;      // 0x1021 = (1) 0001 0000 0010 0001 = x^16+x^12+x^5+1
+    //                                                    1    0    2    1
+
+    //                                                    (1) 0000 0101
+
+    // 0
 }
 
 

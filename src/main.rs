@@ -196,7 +196,6 @@ fn process(pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics
 {
 
     let data = pcap.data;
-    let mut must_show = false;
 
     // packet counter
     st.count += 1;
@@ -213,19 +212,50 @@ fn process(pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics
     if st.addrcnt[h16] > st.maxh {
         st.maxh = st.addrcnt[h16];
         st.maxa = h16 as u32;
-        must_show = true;
     }
 
     let info = examine(data);
     
 
-    if info.is_some() {
-        write_packet_info(pcap, data, &info.expect("checked above"), st.addrcnt[h16]);
-    } else if  st.addrcnt[h16] > 2 {
-        write_packet_noinfo(pcap, data, st.addrcnt[h16]);
-    } else {
-        // ???
+    match info {
+        Some(i) => {
+            match i.crc {
+                CRC::U16(_) => {
+                    write_packet_info(pcap, data, &i, st.addrcnt[h16]);
+                },
+                CRC::U8(_) => {
+                    if  st.addrcnt[h16] > 1 {
+                        write_packet_info(pcap, data, &i, st.addrcnt[h16]);
+                    }
+                },
+                CRC::None => {
+                    if  st.addrcnt[h16] > 2 {
+                        write_packet_noinfo(pcap, data, st.addrcnt[h16]);
+                    }
+                }
+            }
+
+
+            
+        }
+        None => {
+            if  st.addrcnt[h16] > 2 {
+                write_packet_noinfo(pcap, data, st.addrcnt[h16]);
+            }
+        }
     }
+
+
+    // if info.is_some() {
+
+
+
+    //     write_packet_info(pcap, data, &info.expect("checked above"), st.addrcnt[h16]);
+    // } else if  st.addrcnt[h16] > 2 {
+    //     write_packet_noinfo(pcap, data, st.addrcnt[h16]);
+    // } else {
+    //     // ???
+    // }
 
 
     // if must_show {

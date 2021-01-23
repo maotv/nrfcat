@@ -91,25 +91,33 @@ fn write_packet_noinfo(hdr: &LegacyPcapBlock, data: &[u8], cnt: u32) {
             data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
             data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
             data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
-            
         )),
         cnt
-        
     );
 }
 fn write_packet_info(hdr: &LegacyPcapBlock, p: &[u8], info: &PacketInfo, cnt: u32) {
 
 //    let tx = match info.type
+    let data = &info.data;
 
 
     if info.length < 6 {
-        println!("{:05}.{:03} | {}", hdr.ts_sec&0xffff, hdr.ts_usec/1000, Colour::Red.paint("Invalid Packet") );
+        println!("{:05}.{:03} | - | {} | {} | {} | HCNT {}", hdr.ts_sec&0xffff, hdr.ts_usec/1000,
+        Colour::Blue.paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
+        Colour::Blue.paint(format!("{:02x} {:02x}", data[3], data[4])),
+        Colour::Red.paint(format!("{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x}", 
+            data[5], data[6], data[7], 
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15], 
+            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+            data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31],
+        )),
+        cnt
+    );
         return;
     }
 
     // println!("{:?}", info);
 
-    let data = &info.data;
     let se = match info.kind {
         PacketKind::Simple => "s",
         PacketKind::Enhanced => "e",

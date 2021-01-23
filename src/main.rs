@@ -1,35 +1,13 @@
+
+
 use pcap_parser::*;
 use pcap_parser::traits::PcapReaderIterator;
-use std::fs::File;
-use std::io::Read;
 
-use ansi_term::{ANSIGenericString, Colour};
-use ansi_term::Style;
-use std::fmt::Write;
+use ansi_term::Colour;
 
-fn xmain() {
-
-    // let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0xff, 0x00, 0x00, 0x08, 0x0f, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x91, 0xc0, 0xd1, 0x3b, 0xee, 0xa3, 0xef, 0x56, 0x60, 0x17, 0x88, 0x87, 0x50 ];
-//    let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0x55, 0x00, 0x00, 0x08, 0x79, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x95, 0x69, 0xcc, 0x24, 0x57, 0x95, 0xb4, 0xfd, 0x99, 0x9e, 0x2a, 0x2f, 0x56 ];
-    // let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0x55, 0x00, 0x00, 0x09, 0x05, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x04, 0xb0, 0xe1, 0x2e, 0x0e, 0x94, 0x55, 0x60, 0x93, 0x54, 0xb9, 0x4d, 0x6c];
-    
-    let dummy: [u8;32] = [ 0x45, 0x44, 0x43, 0x42, 0x41, 0xcf, 0x00, 0x00, 0x00, 0x00, 0x68, 0x3e, 0x1b, 0x5b, 0x5d, 0xc4, 0xb5, 0xf7, 0xaa, 0xde, 0xf2, 0xa6, 0xe4, 0x7e, 0x73, 0xbb, 0x22, 0x7f, 0xde, 0x75, 0x7a, 0x6f ];
-        // let dummy: [u8;32] = [ 0x45, 0x44, 0x43, 0x42, 0x41, 0x84, 0x04, 0x00, 0x00, 0x5d, 0xd4, 0x37, 0xb3, 0xff, 0xdf, 0xd0, 0x77, 0x6d, 0xb6, 0xa8, 0xdb, 0x53, 0x5d, 0x6d, 0xd3, 0x2b, 0x2d, 0x52, 0xdb, 0x5d, 0x9d, 0xb5 ];
-
-    //let xdummy: [u8;1] = [ 0x01 ];
-    println!("{:x?}", dummy);
-    println!("{:x?}", shift_left(&dummy));
-    
-    examine(&dummy);
-
-//     let cs = State::<X_25>::calculate(&dummy[0..11]);
-//     println!("lib: {:04x}", cs)
-
-}
 
 #[derive(Debug)]
 enum CRC {
-    None,
     U8(u8),
     U16(u16)
 }
@@ -71,14 +49,14 @@ impl Statistics {
     }
 }
 
-enum ANSI {
-    Normal,
-    Dark
-}
+// enum ANSI {
+//     Normal,
+//     Dark
+// }
 
-// fn style(c: ANSI, t: String) -> ANSIGenericString<str> {
+// fn _style(c: ANSI, t: String) -> impl Display {
 
-
+//     Colour::Green.paint("")
 // }
 
 fn write_packet_noinfo(hdr: &LegacyPcapBlock, data: &[u8], cnt: u32) {
@@ -95,7 +73,9 @@ fn write_packet_noinfo(hdr: &LegacyPcapBlock, data: &[u8], cnt: u32) {
         cnt
     );
 }
-fn write_packet_info(hdr: &LegacyPcapBlock, p: &[u8], info: &PacketInfo, cnt: u32) {
+
+
+fn write_packet_info(hdr: &LegacyPcapBlock, _p: &[u8], info: &PacketInfo, cnt: u32) {
 
 //    let tx = match info.type
     let data = &info.data;
@@ -120,8 +100,7 @@ fn write_packet_info(hdr: &LegacyPcapBlock, p: &[u8], info: &PacketInfo, cnt: u3
 
     let se = match info.kind {
         PacketKind::Simple => "s",
-        PacketKind::Enhanced => "e",
-        _ => "-"
+        PacketKind::Enhanced => "e"
     };
 
     let pckt = format!("XA XB XC XD XE {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} {:02x} ", 
@@ -132,16 +111,14 @@ fn write_packet_info(hdr: &LegacyPcapBlock, p: &[u8], info: &PacketInfo, cnt: u3
     );
 
     let crclength = match info.crc {
-        CRC::U8(c) => 1,
-        CRC::U16(c) => 2,
-        CRC::None => 0,
+        CRC::U8(_) => 1,
+        CRC::U16(_) => 2,
     };
 
     let realp = &pckt[5*3..info.length*3];
     let crcs = match info.crc {
-        CRC::U8(c) => format!("{:02x}", data[info.length]),
-        CRC::U16(c) => format!("{:02x} {:02x}", data[info.length], data[info.length+1]),
-        CRC::None => format!(""),
+        CRC::U8(_) => format!("{:02x}", data[info.length]),
+        CRC::U16(_) => format!("{:02x} {:02x}", data[info.length], data[info.length+1]),
     };
 
     let rest = &pckt[(info.length+crclength)*3..32*3];
@@ -177,30 +154,8 @@ fn write_packet_info(hdr: &LegacyPcapBlock, p: &[u8], info: &PacketInfo, cnt: u3
 }
 
 
-fn build_packet_string(data: &[u8], pi: Option<PacketInfo>) {
 
-    let mut out = String::with_capacity(256);
-
-    // let base_hdr = match hdr {
-    //     true => Colour::Green.normal().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2])),
-    //     false => Style::new().paint(format!("{:02x} {:02x} {:02x}", data[0], data[1], data[2]))
-    // };
-
-
-    for i in 3..32 {
-//        if i > length {
-            // write!(out, "{} ", style(ANSI::Dark, &format!("{:02x}", data[i])) );
-//        }
-
-    }
-
-
-    // Colour::Green.paint(format!("{:04x}", pack_crc);
-
-
-}
-
-fn process(pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics 
+fn process(_pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics 
 {
 
     let data = pcap.data;
@@ -229,16 +184,11 @@ fn process(pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics
         Some(i) => {
             match i.crc {
                 CRC::U16(_) => {
-                    write_packet_info(pcap, data, &i, st.addrcnt[h16]);
+                    // write_packet_info(pcap, data, &i, st.addrcnt[h16]);
                 },
                 CRC::U8(_) => {
                     if  st.addrcnt[h16] > 1 {
                         write_packet_info(pcap, data, &i, st.addrcnt[h16]);
-                    }
-                },
-                CRC::None => {
-                    if  st.addrcnt[h16] > 2 {
-                        write_packet_noinfo(pcap, data, st.addrcnt[h16]);
                     }
                 }
             }
@@ -310,25 +260,13 @@ fn main() {
     // let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0xff, 0x00, 0x00, 0x08, 0x0f, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x91, 0xc0, 0xd1, 0x3b, 0xee, 0xa3, 0xef, 0x56, 0x60, 0x17, 0x88, 0x87, 0x50 ];
 
 
-    // let path = "5545.pcap";
-
-    let prepend: [u8;0] = [ ];
-
     let stdin = std::io::stdin();
 
 //     let mut file = File::open(path).unwrap();
     let mut num_blocks = 0;
     let mut reader = LegacyPcapReader::new(65536, stdin).expect("PcapNGReader");
     
-    let mut hdrcnt: [usize; 0x10000] = [0; 65536];
-
     let mut cnt = 0;
-
-
-    let mut linecnt = 0;
-
-    let mut max = 0;
-
 
     let mut stats = Statistics::new();
     let mut allstats: Vec<Statistics> = Vec::new();
@@ -385,8 +323,6 @@ fn main() {
 
 fn examine(p: &[u8]) -> Option<PacketInfo> {
 
-    let mut valid = false;
-
     for hdr in 3..6 {
         for dlen in 1..(30-hdr) {
             let rv = match examine_as_simple_shockburst(p, hdr, dlen) {
@@ -410,7 +346,7 @@ fn examine(p: &[u8]) -> Option<PacketInfo> {
 fn examine_as_simple_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Option<PacketInfo> {
 
     if p.len() < 32 { println!("small pack"); return None; }
-    let head = header64(p,hdrlen);
+    // let head = header64(p,hdrlen);
     let calc_crc_16  = crc16(p, (hdrlen+datalen)*8);
     let calc_crc_8  = crc8(p, (hdrlen+datalen)*8);
 
@@ -444,7 +380,7 @@ fn examine_as_simple_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Opti
 fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Option<PacketInfo> {
 
     if p.len() < 32 { println!("small pack"); return None; }
-    let head = header64(p,hdrlen);
+    //let head = header64(p,hdrlen);
     let calc_crc_16  = crc16(p, ((hdrlen+datalen)*8) + 9 );
     let calc_crc_8  = crc8(p, ((hdrlen+datalen)*8) + 9 );
 
@@ -501,38 +437,17 @@ fn shift_left(p: &[u8]) -> [u8;32] {
 }
 
 
-fn header64(p: &[u8], hdrlen: usize) -> u64 {
-    let head: u64 = match hdrlen {
-        3 => (p[0] as u64)<<16 | (p[1] as u64)<<8 | (p[2] as u64),
-        4 => (p[0] as u64)<<24 | (p[1] as u64)<<16 | (p[2] as u64)<<8 | (p[3] as u64),
-        5 => (p[0] as u64)<<32 | (p[1] as u64)<<24 | (p[2] as u64)<<16 | (p[3] as u64)<<8 | (p[4] as u64),
-        _ => 0
-    };
-    head
-}
-
-fn parse_enhanced(p: &[u8], hdrlen: usize) {
-
-    if p.len() < 32 { println!("small pack"); return; }
-
-    let head: u64 = match hdrlen {
-        3 => (p[0] as u64)<<16 | (p[1] as u64)<<8 | (p[2] as u64),
-        4 => (p[0] as u64)<<24 | (p[1] as u64)<<16 | (p[2] as u64)<<8 | (p[3] as u64),
-        5 => (p[0] as u64)<<32 | (p[1] as u64)<<24 | (p[2] as u64)<<16 | (p[3] as u64)<<8 | (p[4] as u64),
-        _ => 0
-    };
-
-    let pcf = p[hdrlen];
-
-    let plen = (pcf&0xFC)>>2;
-    let pid = pcf&0x03;
-    let nack = (p[hdrlen+1] & 0x80) >> 7;
+// fn header64(p: &[u8], hdrlen: usize) -> u64 {
+//     let head: u64 = match hdrlen {
+//         3 => (p[0] as u64)<<16 | (p[1] as u64)<<8 | (p[2] as u64),
+//         4 => (p[0] as u64)<<24 | (p[1] as u64)<<16 | (p[2] as u64)<<8 | (p[3] as u64),
+//         5 => (p[0] as u64)<<32 | (p[1] as u64)<<24 | (p[2] as u64)<<16 | (p[3] as u64)<<8 | (p[4] as u64),
+//         _ => 0
+//     };
+//     head
+// }
 
 
-
-
-
-}
 
 fn tvb_get_guint8(p: &[u8], offs: usize) -> u8 {
     // println!("tvb_get_guint8({}) -> {:02x}", offs, p[offs]);

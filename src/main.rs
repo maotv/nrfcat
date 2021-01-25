@@ -155,7 +155,7 @@ fn write_packet_info(hdr: &LegacyPcapBlock, _p: &[u8], info: &PacketInfo, cnt: u
 
 
 
-fn process(_pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics 
+fn process(_pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics, level: usize) -> Statistics 
 {
 
     let data = pcap.data;
@@ -184,11 +184,13 @@ fn process(_pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics
         Some(i) => {
             match i.crc {
                 CRC::U16(_) => {
-                    // write_packet_info(pcap, data, &i, st.addrcnt[h16]);
+                    write_packet_info(pcap, data, &i, st.addrcnt[h16]);
                 },
                 CRC::U8(_) => {
                     if  st.addrcnt[h16] > 1 {
-                        write_packet_info(pcap, data, &i, st.addrcnt[h16]);
+                        if level < 2 {
+                            write_packet_info(pcap, data, &i, st.addrcnt[h16]);
+                        }
                     }
                 }
             }
@@ -198,7 +200,9 @@ fn process(_pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics
         }
         None => {
             if  st.addrcnt[h16] > 2 {
-                write_packet_noinfo(pcap, data, st.addrcnt[h16]);
+                if level < 1 {
+                    write_packet_noinfo(pcap, data, st.addrcnt[h16]);
+                }
             }
         }
     }
@@ -257,7 +261,15 @@ fn process(_pcnt: u32, pcap: &LegacyPcapBlock,mut st: Statistics) -> Statistics
 
 fn main() {
 
+
     // let dummy: [u8;32] = [ 0x01, 0x02, 0x03, 0x02, 0x01, 0x10, 0x17, 0xff, 0xff, 0x00, 0x00, 0x08, 0x0f, 0x00, 0x00, 0x7a, 0x69, 0xff, 0xff, 0x91, 0xc0, 0xd1, 0x3b, 0xee, 0xa3, 0xef, 0x56, 0x60, 0x17, 0x88, 0x87, 0x50 ];
+    let args: Vec<String> = std::env::args().collect();
+
+    let level = if args.len() > 1 {
+        args[1].parse().unwrap_or(0)
+    } else {
+        0
+    };
 
 
     let stdin = std::io::stdin();
@@ -294,7 +306,7 @@ fn main() {
 
                             
 
-                            stats = process(cnt, &b, stats);
+                            stats = process(cnt, &b, stats, level);
                             cnt += 1;
     
                         }
@@ -394,7 +406,8 @@ fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Op
     if calc_crc_16 == pack_crc_16 {
         
         // println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc_16, Colour::Green.paint(format!("{:04x}", pack_crc_16)));
-        datav.extend_from_slice(&shifted[5..32]);
+        datav.extend_from_slice(&shifted[5..31]);
+        datav.push(p[31]);
         Some(PacketInfo {
             kind: PacketKind::Enhanced,
             length: hdrlen + datalen + 1,
@@ -403,7 +416,8 @@ fn examine_as_enhanced_shockburst(p: &[u8], hdrlen: usize, datalen: usize) -> Op
         })
     } else if calc_crc_8 == pack_crc_8 {
             // println!("e {}/{} {:012x} => {:04x} ({})", hdrlen, datalen, head, calc_crc_8, Colour::Green.paint(format!("{:04x}", pack_crc_8)));
-            datav.extend_from_slice(&shifted[5..32]);
+            datav.extend_from_slice(&shifted[5..31]);
+            datav.push(p[31]);
             Some(PacketInfo {
                 kind: PacketKind::Enhanced,
                 length: hdrlen + datalen + 1,
